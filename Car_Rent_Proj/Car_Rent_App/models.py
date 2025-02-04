@@ -40,3 +40,5 @@ class Availability(models.Model):
     pickup_date = models.DateField()
     return_date = models.DateField()
     available_quantity = models.IntegerField()
+
+
