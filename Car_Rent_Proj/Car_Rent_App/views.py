@@ -1,101 +1,204 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Car, Booking, Reservation, Cancellation, Availability
-from datetime import datetime
+from .serializers import CarSerializer, BookingSerializer, ReservationSerializer, CancellationSerializer, AvailabilitySerializer
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.decorators import action
+class CarViewSet(viewsets.ModelViewSet):
+    queryset = Car.objects.all()
+    serializer_class = CarSerializer
+    authentication_classes = [JWTAuthentication]  # Use JWT Authentication
+    permission_classes = [IsAuthenticated]  # Ensure this matches your requirements
 
-def calculate_price(price_per_day, pickup_date, return_date):
-    # Convert string dates to datetime objects
-    pickup_date = datetime.strptime(pickup_date, '%Y-%m-%d')
-    return_date = datetime.strptime(return_date, '%Y-%m-%d')
+    def list(self, request):
+        return super().list(request)
 
-    # Calculate the number of days between pickup and return
-    rental_days = (return_date - pickup_date).days
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+    authentication_classes = [JWTAuthentication]  # Use JWT Authentication
+    permission_classes = [IsAuthenticated]
 
-    # Ensure rental days are positive
-    if rental_days < 0:
-        return 0  # Or raise an exception as needed
+    def create(self, request):
+        return super().create(request)
 
-    # Calculate total price
-    total_price = rental_days * price_per_day
-    return total_price
+class ReservationViewSet(viewsets.ModelViewSet):
+    queryset = Reservation.objects.all()
+    serializer_class = ReservationSerializer
+    authentication_classes = [JWTAuthentication]  # Use JWT Authentication
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request):
+        return super().create(request)
+
+class CancellationViewSet(viewsets.ModelViewSet):
+    queryset = Cancellation.objects.all()
+    serializer_class = CancellationSerializer
+    authentication_classes = [JWTAuthentication]  # Use JWT Authentication
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request):
+        booking_id = request.data.get('booking_id')
+        reason = request.data.get('reason')
+
+        # Check if the booking exists
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            cancellation = Cancellation.objects.create(booking=booking, reason=reason)
+            return Response(CancellationSerializer(cancellation).data, status=status.HTTP_201_CREATED)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+        
 
 
-def car_list(request):
-    cars = Car.objects.filter(availability_status=True)
-    return render(request, 'cars/car_list.html', {'cars': cars})
+class AvailabilityViewSet(viewsets.ModelViewSet):
+    queryset = Availability.objects.all()
+    serializer_class = AvailabilitySerializer
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-def book_car(request, car_id):
-    car = get_object_or_404(Car, id=car_id)
+    @action(detail=False, methods=['get'], url_path='check')
+    def check_availability(self, request):
+        car_id = request.query_params.get('car_id')
+        pickup_date = request.query_params.get('pickup_date')
+        return_date = request.query_params.get('return_date')
 
-    if request.method == "POST":
-        pickup_date = request.POST.get('pickup_date')
-        return_date = request.POST.get('return_date')
-        total_price = calculate_price(car.price_per_day, pickup_date, return_date)  # Define this function based on your pricing logic
+        if not car_id or not pickup_date or not return_date:
+            return Response({"error": "Missing required parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        booking = Booking.objects.create(
-            user=request.user,
-            car=car,
-            pickup_date=pickup_date,
-            return_date=return_date,
-            total_price=total_price,
-        )
-        return redirect('booking_confirmation', booking_id=booking.booking_id)
+        # Check availability logic
+        available_quantity = self.get_availability(car_id, pickup_date, return_date)
 
-    return render(request, 'cars/book_car.html', {'car': car})
+        # Get the availability record for the car
+        availability_record = self.get_queryset().filter(car__car_id=car_id).first()
 
-def reserve_car(request, car_id):
-    car = get_object_or_404(Car, id=car_id)
+        if availability_record:
+            # Return the available quantity along with existing availability details
+            serialized_availability = AvailabilitySerializer(availability_record).data
+            serialized_availability['available_quantity'] = available_quantity  # Add available quantity to the serialized data
+            return Response(serialized_availability)
 
-    if request.method == "POST":
-        pickup_date = request.POST.get('pickup_date')
-        return_date = request.POST.get('return_date')
+        return Response({"available_quantity": available_quantity})  # If no availability record exists
 
-        reservation = Reservation.objects.create(
-            user=request.user,
-            car=car,
-            pickup_date=pickup_date,
-            return_date=return_date,
-        )
-        return redirect('reservation_confirmation', reservation_id=reservation.reservation_id)
+    def get_availability(self, car_id, pickup_date, return_date):
+        # Count bookings that overlap with the requested dates
+        bookings_count = Booking.objects.filter(
+            car_id=car_id,
+            pickup_date__lt=return_date,
+            return_date__gt=pickup_date
+        ).count()
 
-    return render(request, 'cars/reserve_car.html', {'car': car})
+        # Get the availability record for the car
+        availability_record = Availability.objects.filter(car__car_id=car_id).first()
 
-def cancel_booking(request, booking_id):
-    booking = get_object_or_404(Booking, id=booking_id, user=request.user)
+        if availability_record:
+            available_quantity_after_bookings = availability_record.available_quantity - bookings_count
+            return max(0, available_quantity_after_bookings)  # Ensure we don't go below zero
 
-    if request.method == "POST":
-        reason = request.POST.get('reason')
-        Cancellation.objects.create(booking=booking, reason=reason)
-        booking.delete()  # Optionally delete the booking or mark it as cancelled
-        return redirect('profile')  # Redirect to user profile or bookings page
+        return 0  # If no availability record exists
+# class AvailabilityViewSet(viewsets.ViewSet):
+#     authentication_classes = [JWTAuthentication]  # Use JWT Authentication
+#     permission_classes = [IsAuthenticated]
 
-    return render(request, 'cancel_booking.html', {'booking': booking})
+#     def check_availability(self, request):
+#         car_id = request.query_params.get('car_id')
+#         pickup_date = request.query_params.get('pickup_date')
+#         return_date = request.query_params.get('return_date')
 
-def check_availability(request):
-    if request.method == "POST":
-        car_id = request.POST.get('car_id')
-        pickup_date = request.POST.get('pickup_date')
-        return_date = request.POST.get('return_date')
+#         if not car_id or not pickup_date or not return_date:
+#             return Response({"error": "Missing required parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        available_quantity = check_car_availability(car_id, pickup_date, return_date)
+#         # Check availability logic here (implement your own logic)
+#         available_quantity = self.get_availability(car_id, pickup_date, return_date)
+        
+#         # Get the availability record for the car to include more details in the response
+#         availability_record = Availability.objects.filter(car__car_id=car_id).first()
+        
+#         if availability_record:
+#             serialized_availability = AvailabilitySerializer(availability_record).data
+#             serialized_availability['available_quantity'] = available_quantity  # Add available quantity to the serialized data
+#             return Response(serialized_availability)
+        
+#         return Response({"available_quantity": available_quantity})  # If no availability record exists
 
-        return render(request, 'availability_result.html', {'available_quantity': available_quantity})
+#     def get_availability(self, car_id, pickup_date, return_date):
+#         # Count bookings that overlap with the requested dates
+#         bookings_count = Booking.objects.filter(
+#             car_id=car_id,
+#             pickup_date__lt=return_date,
+#             return_date__gt=pickup_date
+#         ).count()
 
-    return render(request, 'check_availability.html')
+#         # Get the availability record for the car
+#         availability_record = Availability.objects.filter(car__car_id=car_id).first()
 
-def check_car_availability(car_id, pickup_date, return_date):
-    # Check if there are any overlapping bookings
-    has_bookings = Booking.objects.filter(
-        car_id=car_id,
-        pickup_date__lt=return_date,
-        return_date__gt=pickup_date
-    ).exists()
+#         if availability_record:
+#             available_quantity_after_bookings = availability_record.available_quantity - bookings_count
+#             return max(0, available_quantity_after_bookings)  # Ensure we don't go below zero
 
-    # Get the availability record for the car
-    availability_record = Availability.objects.filter(car__car_id=car_id).first()
+#         return 0  # If no availability record exists
 
-    if availability_record:
-        if has_bookings:
-            return max(0, availability_record.available_quantity - 1)  # Reduce by one if booked
-        return availability_record.available_quantity  # Return full quantity if no bookings
+# class AvailabilityViewSet(viewsets.ModelViewSet):
+#     queryset = Availability.objects.all()
+#     serializer_class = AvailabilitySerializer
+#     authentication_classes = [JWTAuthentication]
+#     permission_classes = [IsAuthenticated]
 
-    return 0  # If no availability record exists
+#     def list(self, request):
+#         # GET /api/cars/availability/
+#         queryset = self.get_queryset()
+#         serializer = self.get_serializer(queryset, many=True)
+#         return Response(serializer.data)
+
+#     def retrieve(self, request, pk=None):
+#         # GET /api/cars/availability/{id}/
+#         try:
+#             availability = self.get_queryset().get(pk=pk)
+#             serializer = self.get_serializer(availability)
+#             return Response(serializer.data)
+#         except Availability.DoesNotExist:
+#             return Response({"error": "Availability not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#     def create(self, request):
+#         # POST /api/cars/availability/
+#         serializer = self.get_serializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def update(self, request, pk=None):
+#         # PUT /api/cars/availability/{id}/
+#         try:
+#             availability = self.get_queryset().get(pk=pk)
+#             serializer = self.get_serializer(availability, data=request.data)
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 return Response(serializer.data)
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         except Availability.DoesNotExist:
+#             return Response({"error": "Availability not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#     def partial_update(self, request, pk=None):
+#         # PATCH /api/cars/availability/{id}/
+#         try:
+#             availability = self.get_queryset().get(pk=pk)
+#             serializer = self.get_serializer(availability, data=request.data, partial=True)
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 return Response(serializer.data)
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         except Availability.DoesNotExist:
+#             return Response({"error": "Availability not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#     def destroy(self, request, pk=None):
+#         # DELETE /api/cars/availability/{id}/
+#         try:
+#             availability = self.get_queryset().get(pk=pk)
+#             availability.delete()
+#             return Response(status=status.HTTP_204_NO_CONTENT)
+#         except Availability.DoesNotExist:
+#             return Response({"error": "Availability not found."}, status=status.HTTP_404_NOT_FOUND)
+

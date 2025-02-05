@@ -1,16 +1,17 @@
-from django.urls import path
-from .views import (
-    car_list,
-    book_car,
-    reserve_car,
-    cancel_booking,
-    check_availability
-)
+
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import CarViewSet, BookingViewSet, ReservationViewSet, CancellationViewSet, AvailabilityViewSet
+
+# Create a router and register our viewsets with it.
+router = DefaultRouter()
+router.register(r'cars', CarViewSet)
+router.register(r'bookings', BookingViewSet)
+router.register(r'reservations', ReservationViewSet)
+router.register(r'cancellations', CancellationViewSet)
+router.register(r'cars/availability', AvailabilityViewSet)
 
 urlpatterns = [
-    path('', car_list, name='car_list'),
-    path('car/<int:car_id>/book/', book_car, name='book_car'),
-    path('car/<int:car_id>/reserve/', reserve_car, name='reserve_car'),
-    path('cancel/<int:booking_id>/', cancel_booking, name='cancel_booking'),
-    path('check_availability/', check_availability, name='check_availability'),
+    path('', include(router.urls)),  # Include router URLs for REST API
 ]
