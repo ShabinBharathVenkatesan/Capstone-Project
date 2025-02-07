@@ -1,12 +1,14 @@
+
+
 from django.db import models
 from django.contrib.auth.models import User
-
 class AdminUser(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)  # Link to User model
-    # Add any additional fields if necessary
-    is_super_admin = models.BooleanField(default=False)
+    username = models.CharField(max_length=150, unique=True)  # Username field
+    password = models.CharField(max_length=128)  # Password field
 
     def __str__(self):
-        return self.user.username
+        return self.username
 
-
+# class AdminUser(models.Model):
+#     username = models.CharField(max_length=150, unique=True)
+#     password = models.CharField(max_length=128, default="temporary_password")  # Add default

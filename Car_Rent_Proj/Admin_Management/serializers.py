@@ -32,30 +32,54 @@
 #         return user
 
 
+
+
+
+
+
+
 from rest_framework import serializers
 from .models import AdminUser
-from django.contrib.auth.models import User
 
 class AdminUserSerializer(serializers.ModelSerializer):
-    # You can also serialize related User fields if needed
-    username = serializers.CharField(source='user.username')
-    email = serializers.EmailField(source='user.email')
-
     class Meta:
         model = AdminUser
-        fields = ['id', 'username', 'email', 'is_super_admin']  # Include relevant fields
+        fields = "__all__"  # Include all fields in the model
+        extra_kwargs = {'password': {'write_only': True}} # Added for security purpose
 
     def create(self, validated_data):
-        user_data = validated_data.pop('user')  # Extract user data
-        user = User(**user_data)  # Create User instance
-        user.set_password(user_data.get('password'))  # Hash the password
-        user.save()  # Save User instance
-
-        admin_user = AdminUser.objects.create(user=user, **validated_data)  # Create AdminUser instance
+        admin_user = AdminUser.objects.create(**validated_data)
         return admin_user
 
-    def validate_email(self, value):
-        """Check that the email is valid and unique."""
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("This email is already in use.")
-        return value
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+# class AdminUserSerializer(serializers.ModelSerializer):
+#     # You can also serialize related User fields if needed
+#     username = serializers.CharField(source='user.username')
+#     email = serializers.EmailField(source='user.email')
+
+#     class Meta:
+#         model = AdminUser
+#         fields = "__all__" 
+#         # fields = ['id', 'username', 'email', 'is_super_admin']  # Include relevant fields
+
+#     def create(self, validated_data):
+#         user_data = validated_data.pop('user')  # Extract user data
+#         user = User(**user_data)  # Create User instance
+#         user.set_password(user_data.get('password'))  # Hash the password
+#         user.save()  # Save User instance
+
+#         admin_user = AdminUser.objects.create(user=user, **validated_data)  # Create AdminUser instance
+#         return admin_user
+
+#     def validate_email(self, value):
+#         """Check that the email is valid and unique."""
+#         if User.objects.filter(email=value).exists():
+#             raise serializers.ValidationError("This email is already in use.")
+#         return value
+
+

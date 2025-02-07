@@ -94,3 +94,51 @@ urlpatterns = [
 # Serve static files in development (if needed)
 # if settings.DEBUG:
 #     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# from django.contrib import admin
+# from django.conf import settings
+# from django.conf.urls.static import static
+# from rest_framework_simplejwt.views import (
+#     TokenObtainPairView,
+#     TokenRefreshView,
+# )
+# from rest_framework_simplejwt import authentication
+# from django.urls import path, include
+# from rest_framework import permissions
+# from drf_yasg.views import get_schema_view
+# from drf_yasg import openapi
+# from Admin_Management.schema_generator import CustomSchemaGenerator  # Import your custom generator
+
+# # Set up Swagger schema view
+# schema_view = get_schema_view(
+#    openapi.Info(
+#       title="Car Rent API",
+#       default_version='v1',
+#       description="API documentation for the Car Rental application",
+#       terms_of_service="https://www.google.com/policies/terms/",
+#       contact=openapi.Contact(email="contact@carrent.local"),
+#       license=openapi.License(name="BSD License"),
+#    ),
+#    public=True,
+#    authentication_classes=(authentication.JWTAuthentication,),
+#    permission_classes=(permissions.AllowAny,),
+#    generator_class=CustomSchemaGenerator # Use your custom generator
+# )
+
+# urlpatterns = [
+#     path('admin/', admin.site.urls),
+
+#     # JWT Token endpoints
+#     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+#     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+#     # Include URLs for Car_Rent_App
+#     path("api/cars/", include('Car_Rent_App.urls')),  # Adjusted to match your app structure
+
+#     # Include URLs for User Management and Admin Management if applicable
+#     path("api/user/", include('User_Management.urls')),
+#     path("api/admin/", include('Admin_Management.urls')),  # If you have admin management
+
+#     # Swagger documentation endpoint
+#     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+# ]

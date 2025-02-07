@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Car, Booking, Reservation, Cancellation, Availability
 
+
 class CarSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
@@ -26,3 +27,7 @@ class AvailabilitySerializer(serializers.ModelSerializer):
         model = Availability
         fields = ['car', 'pickup_date', 'return_date', 'available_quantity']  # Adjust fields as necessary
 
+class CarAvailabilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Availability
+        fields = ['car', 'pickup_date', 'return_date', 'available_quantity']
